@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="4a4ed77e-5197-4c5e-9a18-9697b88a2632" name="Changes" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Go File" />
+      </list>
+    </option>
+  </component>
+  <component name="GOROOT" url="file://$USER_HOME$/sdk/go1.27.1" />
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3KtT8JvwYTP9PlJJozAJO9Hg72b" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
+    &quot;Go Build.go build workflow-engine/cmd/server.executor&quot;: &quot;Run&quot;,
+    &quot;Go Test.TestResolveStepInput in workflow-engine/internal/engine.executor&quot;: &quot;Run&quot;,
+    &quot;Go Test.TestRunSurvivesDatabaseReopen in workflow-engine/internal/store.executor&quot;: &quot;Run&quot;,
+    &quot;Go Test.TestRunWorkflowAutomaticallyExecutesDependencies in workflow-engine/internal/engine.executor&quot;: &quot;Run&quot;,
+    &quot;Go Test.TestSaveExecutionState in workflow-engine/internal/store.executor&quot;: &quot;Run&quot;,
+    &quot;Go Test.engine_test.go.executor&quot;: &quot;Run&quot;,
+    &quot;Go Test.execution_test.go.executor&quot;: &quot;Run&quot;,
+    &quot;Go Test.go test engine.executor&quot;: &quot;Run&quot;,
+    &quot;Go Test.go test store.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.GoLinterPluginOnboardingV2&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.GoLinterPluginStorageMigration&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.GoOptimizationToolWindowEnableInLayout.v333333&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.analysis.ui.options.defaults&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;go.sdk.automatically.set&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/mac/Documents/code/workflow_engine&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;python.packages.toolwindow.project.migrated.to.right.top.v2&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="RunManager" selected="Go Build.go build workflow-engine/cmd/server">
+    <configuration name="go build workflow-engine" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="workflow-engine" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/cmd/api" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build workflow-engine/cmd/server" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="workflow-engine/cmd/server" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/cmd/server" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestResolveStepInput in workflow-engine/internal/engine" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$/internal/engine" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="workflow-engine/internal/engine" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestResolveStepInput\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestRunSurvivesDatabaseReopen in workflow-engine/internal/store" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$/internal/store" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="workflow-engine/internal/store" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestRunSurvivesDatabaseReopen\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="TestSaveExecutionState in workflow-engine/internal/store" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$/internal/store" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="workflow-engine/internal/store" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestSaveExecutionState\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go test engine" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$/internal/engine" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="DIRECTORY" />
+      <directory value="$PROJECT_DIR$/internal/engine" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go test store" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$/internal/store" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="DIRECTORY" />
+      <directory value="$PROJECT_DIR$/internal/store" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <method v="2" />
+    </configuration>
+    <list>
+      <item itemvalue="Go Build.go build workflow-engine/cmd/server" />
+      <item itemvalue="Go Build.go build workflow-engine" />
+      <item itemvalue="Go Test.go test engine" />
+      <item itemvalue="Go Test.go test store" />
+      <item itemvalue="Go Test.TestResolveStepInput in workflow-engine/internal/engine" />
+      <item itemvalue="Go Test.TestRunSurvivesDatabaseReopen in workflow-engine/internal/store" />
+      <item itemvalue="Go Test.TestSaveExecutionState in workflow-engine/internal/store" />
+    </list>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Go Test.go test store" />
+        <item itemvalue="Go Test.go test engine" />
+        <item itemvalue="Go Test.TestSaveExecutionState in workflow-engine/internal/store" />
+        <item itemvalue="Go Test.TestRunSurvivesDatabaseReopen in workflow-engine/internal/store" />
+        <item itemvalue="Go Test.TestResolveStepInput in workflow-engine/internal/engine" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-gosdk-63c95d513abe-08e7ff217c2b-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-262.10968.67" />
+        <option value="bundled-js-predefined-d6986cc7102b-4abd2a77f808-JavaScript-GO-262.10968.67" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="4a4ed77e-5197-4c5e-9a18-9697b88a2632" name="Changes" comment="" />
+      <created>1792375704107</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1792375704107</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VgoModernizerVersionTracker">
+    <upgrades>
+      <map>
+        <entry key="$PROJECT_DIR$/go.mod">
+          <value>
+            <VersionUpgradeInfo>
+              <version>1.27</version>
+              <timestamp>1792377453159</timestamp>
+            </VersionUpgradeInfo>
+          </value>
+        </entry>
+      </map>
+    </upgrades>
+  </component>
+</project>
