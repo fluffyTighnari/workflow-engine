@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="6f6f6b41-f57d-4cc3-956f-32ec543a70e8" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/pkg/engine/engine.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/engine/engine.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/engine/engine_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/engine/engine_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/engine/execute.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/engine/execute.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/engine/execution_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/engine/input_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/engine/integration_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/engine/recover_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/engine/recover_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/engine/resume_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/engine/runner_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/store/list_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/store/load_test.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/store/memory.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/store/memory.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/store/sqlite.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/store/sqlite.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/store/sqlite_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/store/sqlite_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/store/store_test.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/store/store_test.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/store/workflow_store.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/store/workflow_store.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/worker/worker.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/worker/worker.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pkg/workflow/model.go" beforeDir="false" afterPath="$PROJECT_DIR$/pkg/workflow/model.go" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="GOROOT" url="file://$USER_HOME$/go/pkg/mod/golang.org/toolchain@v0.0.1-go1.27.2.windows-amd64" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 7,
+  "fromUser": false
+}]]></component>
+  <component name="ProjectId" id="3LAUHiGVwHCljJvFQ6VECs24ptS" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "Go Build.go build github.com/fluffyTighnari/workflow-engine/examples/async.executor": "Run",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.GoLinterPluginOnboardingV2": "true",
+    "RunOnceActivity.GoLinterPluginStorageMigration": "true",
+    "RunOnceActivity.GoOptimizationToolWindowEnableInLayout.v333333": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.go.analysis.ui.options.defaults": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "master",
+    "go.sdk.automatically.set": "true",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "D:/Workspace/Code/gomain/workflow_engine",
+    "nodejs_package_manager_path": "npm",
+    "run.configurations.included.in.services": "true"
+  }
+}]]></component>
+  <component name="RunDashboard">
+    <option name="configurationTypes">
+      <set>
+        <option value="GoApplicationRunConfiguration" />
+      </set>
+    </option>
+    <option name="configurationStatuses">
+      <map>
+        <entry key="GoApplicationRunConfiguration">
+          <value>
+            <map>
+              <entry key="go build github.com/fluffyTighnari/workflow-engine/examples/async" value="STOPPED" />
+            </map>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="RunManager" selected="Go Build.go build github.com/fluffyTighnari/workflow-engine/examples/async">
+    <configuration name="go build github.com/fluffyTighnari/workflow-engine/basic" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/fluffyTighnari/workflow-engine/basic" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/basic" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build github.com/fluffyTighnari/workflow-engine/examples/async" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/fluffyTighnari/workflow-engine/examples/async" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/examples/async" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build github.com/fluffyTighnari/workflow-engine/examples/basic" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/fluffyTighnari/workflow-engine/examples/basic" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/examples/basic" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build github.com/fluffyTighnari/workflow-engine/examples/custom_store" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/fluffyTighnari/workflow-engine/examples/custom_store" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/examples/custom_store" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build github.com/fluffyTighnari/workflow-engine/examples/sqlite" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/fluffyTighnari/workflow-engine/examples/sqlite" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/examples/sqlite" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build github.com/fluffyTighnari/workflow-engine/sqlite" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/fluffyTighnari/workflow-engine/sqlite" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/sqlite" />
+      <method v="2" />
+    </configuration>
+    <configuration name="go build server/" type="GoApplicationRunConfiguration" factoryName="Go Application" nameIsGenerated="true">
+      <module name="workflow_engine" />
+      <working_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/fluffyTighnari/workflow-engine/cmd/server" />
+      <directory value="$PROJECT_DIR$" />
+      <auto_managed_config_id value="$PROJECT_DIR$/cmd/server" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-gosdk-63c95d513abe-9addb268e56c-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-262.9437.286" />
+        <option value="bundled-js-predefined-d6986cc7102b-4abd2a77f808-JavaScript-GO-262.9437.286" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="6f6f6b41-f57d-4cc3-956f-32ec543a70e8" name="Changes" comment="" />
+      <created>1792896279999</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1792896279999</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="VgoModernizerVersionTracker">
+    <upgrades>
+      <map>
+        <entry key="$PROJECT_DIR$/go.mod">
+          <value>
+            <VersionUpgradeInfo>
+              <version>1.27</version>
+              <timestamp>1792902051402</timestamp>
+            </VersionUpgradeInfo>
+          </value>
+        </entry>
+      </map>
+    </upgrades>
+  </component>
+</project>
