@@ -2,9 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/fluffyTighnari/workflow-engine/pkg/workflow"
 )
@@ -12,62 +12,29 @@ import (
 func TestRunSurvivesDatabaseReopen(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "workflow.db")
+	def := testDefinition()
 
-	def := workflow.WorkflowDefinition{
-		ID:      "demo",
-		Version: 1,
-		Steps: []workflow.Step{
-			{ID: "A", Type: "compute"},
-			{ID: "B", Type: "double", DependsOn: []string{"A"}},
-		},
-	}
-
-	// Create and save a run.
 	s, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := s.SaveDefinition(ctx, def); err != nil {
-		t.Fatal(err)
-	}
-
-	run := &workflow.WorkflowRun{
-		ID:              "test-run-1",
-		WorkflowID:      "demo",
-		WorkflowVersion: 1,
-		Status:          workflow.RunPending,
-		Input:           map[string]any{"value": 42},
-		StepExecutions: map[string]*workflow.StepExecution{
-			"A": {
-				StepID: "A",
-				Status: workflow.StepPending,
-			},
-			"B": {
-				StepID: "B",
-				Status: workflow.StepPending,
-			},
-		},
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}
-
-	if err := s.CreateRun(ctx, def, run); err != nil {
-		t.Fatal(err)
-	}
-
+	run := seedRun(t, ctx, s, "run-reopen", workflow.RunPending,
+		map[string]any{"value": 42})
 	runID := run.ID
 
 	// Close and reopen the database.
-	s.Close()
+	if err := s.Close(); err != nil {
+		t.Fatalf("close store: %v", err)
+	}
 
 	s2, err := Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer s2.Close()
+	t.Cleanup(func() { _ = s2.Close() })
 
-	loadedDef, err := s2.GetDefinition(ctx, "demo", 1)
+	loadedDef, err := s2.GetDefinition(ctx, def.ID, def.Version)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,5 +62,92 @@ func TestRunSurvivesDatabaseReopen(t *testing.T) {
 
 	if loadedRun.StepExecutions["A"].Status != workflow.StepPending {
 		t.Fatal("step A should remain pending")
+	}
+}
+
+func TestOpenMigratesExistingSchema(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "workflow.db")
+
+	// Create the pre-extension schema by hand.
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldSchema := []string{
+		`CREATE TABLE workflow_versions (
+			workflow_id TEXT NOT NULL,
+			version INTEGER NOT NULL,
+			definition_json TEXT NOT NULL,
+			created_at TEXT NOT NULL,
+			PRIMARY KEY (workflow_id, version)
+		)`,
+		`CREATE TABLE workflow_runs (
+			id TEXT PRIMARY KEY,
+			workflow_id TEXT NOT NULL,
+			workflow_version INTEGER NOT NULL,
+			status TEXT NOT NULL,
+			input_json TEXT,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL
+		)`,
+		`CREATE TABLE step_executions (
+			run_id TEXT NOT NULL,
+			step_id TEXT NOT NULL,
+			status TEXT NOT NULL,
+			input_json TEXT,
+			output_json TEXT,
+			error TEXT NOT NULL DEFAULT '',
+			started_at TEXT,
+			finished_at TEXT,
+			PRIMARY KEY (run_id, step_id)
+		)`,
+	}
+	for _, statement := range oldSchema {
+		if _, err := db.ExecContext(ctx, statement); err != nil {
+			t.Fatalf("create old schema: %v", err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("open migrated store: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	// The new columns must be usable after migration.
+	run := seedRun(t, ctx, s, "run-migrated", workflow.RunPending, nil)
+	run.StepExecutions["A"].Status = workflow.StepFailed
+	run.StepExecutions["A"].Failure = &workflow.Failure{
+		Kind:    workflow.FailureKindInput,
+		Message: "migrated",
+	}
+	run.StepExecutions["A"].PendingReason = workflow.PendingReasonNone
+	run.Status = workflow.RunFailed
+	run.Failure = &workflow.Failure{
+		Kind:    workflow.FailureKindInput,
+		Message: "migrated",
+		StepID:  "A",
+	}
+
+	if err := s.SaveExecutionState(ctx, run, "A"); err != nil {
+		t.Fatalf("save after migration: %v", err)
+	}
+
+	loaded, err := s.GetRun(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Failure == nil ||
+		loaded.Failure.Kind != workflow.FailureKindInput {
+		t.Errorf("run failure = %+v, want INPUT", loaded.Failure)
+	}
+	if loaded.StepExecutions["A"].Failure == nil ||
+		loaded.StepExecutions["A"].Failure.Kind != workflow.FailureKindInput {
+		t.Errorf("step failure = %+v, want INPUT",
+			loaded.StepExecutions["A"].Failure)
 	}
 }

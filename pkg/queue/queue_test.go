@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -114,5 +115,33 @@ func TestBoundedQueueClose(t *testing.T) {
 	// 重复 Close 是安全的。
 	if err := q.Close(); err != nil {
 		t.Fatalf("double Close: %v", err)
+	}
+}
+
+func TestBoundedQueueConcurrentCloseAndEnqueueSafe(t *testing.T) {
+	for iteration := 0; iteration < 50; iteration++ {
+		q := NewBoundedQueue(1)
+
+		var wg sync.WaitGroup
+		for i := 0; i < 8; i++ {
+			wg.Add(1)
+			go func(i int) {
+				defer wg.Done()
+				_ = q.Enqueue(context.Background(), Job{
+					ID:    "job",
+					RunID: "run",
+				})
+			}(i)
+		}
+
+		closeDone := make(chan struct{})
+		go func() {
+			_ = q.Close()
+			close(closeDone)
+		}()
+
+		wg.Wait()
+		<-closeDone
+		_ = q.Close()
 	}
 }

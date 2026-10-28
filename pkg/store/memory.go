@@ -25,18 +25,35 @@ func NewMemoryStore() *MemoryStore {
 	}
 }
 
-// SaveDefinition stores a workflow version in memory.
+// SaveDefinition stores a workflow version in memory. Definitions are
+// insert-only; saving the same ID + version again returns
+// ErrDefinitionExists.
 func (m *MemoryStore) SaveDefinition(
 	ctx context.Context,
 	def workflow.WorkflowDefinition,
 ) error {
+	if err := workflow.ValidateDefinition(def); err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidDefinition, err)
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if versions, ok := m.definitions[def.ID]; ok {
+		if _, exists := versions[def.Version]; exists {
+			return fmt.Errorf(
+				"%w: workflow %q version %d",
+				ErrDefinitionExists,
+				def.ID,
+				def.Version,
+			)
+		}
+	}
 
 	if _, ok := m.definitions[def.ID]; !ok {
 		m.definitions[def.ID] = make(map[int]workflow.WorkflowDefinition)
 	}
-	m.definitions[def.ID][def.Version] = def
+	m.definitions[def.ID][def.Version] = cloneDefinition(def)
 	return nil
 }
 
@@ -51,13 +68,16 @@ func (m *MemoryStore) GetDefinition(
 
 	versions, ok := m.definitions[workflowID]
 	if !ok {
-		return workflow.WorkflowDefinition{}, fmt.Errorf("workflow %q not found", workflowID)
+		return workflow.WorkflowDefinition{},
+			fmt.Errorf("workflow %q: %w", workflowID, ErrNotFound)
 	}
 	def, ok := versions[version]
 	if !ok {
-		return workflow.WorkflowDefinition{}, fmt.Errorf("workflow %q version %d not found", workflowID, version)
+		return workflow.WorkflowDefinition{},
+			fmt.Errorf("workflow %q version %d: %w",
+				workflowID, version, ErrNotFound)
 	}
-	return def, nil
+	return cloneDefinition(def), nil
 }
 
 // CreateRun stores a run and its step executions in memory.
@@ -72,6 +92,11 @@ func (m *MemoryStore) CreateRun(
 	// Verify the definition exists.
 	if _, ok := m.definitions[def.ID][def.Version]; !ok {
 		return fmt.Errorf("workflow version must be saved first")
+	}
+
+	// Run creation is insert-only; never silently replace an existing run.
+	if _, exists := m.runs[run.ID]; exists {
+		return fmt.Errorf("%w: %q", ErrRunExists, run.ID)
 	}
 
 	// Deep-copy the run so external mutations don't affect internal state.
@@ -90,7 +115,7 @@ func (m *MemoryStore) GetRun(
 
 	run, ok := m.runs[runID]
 	if !ok {
-		return nil, fmt.Errorf("run %q not found", runID)
+		return nil, fmt.Errorf("run %q: %w", runID, ErrNotFound)
 	}
 	return cloneRun(run), nil
 }
@@ -129,18 +154,55 @@ func (m *MemoryStore) SaveExecutionState(
 	defer m.mu.Unlock()
 
 	// Verify the run exists.
-	if _, ok := m.runs[run.ID]; !ok {
+	stored, ok := m.runs[run.ID]
+	if !ok {
 		return fmt.Errorf("run %q not found", run.ID)
 	}
 
-	// Verify the step execution exists.
-	if _, ok := run.StepExecutions[stepID]; !ok {
+	// Verify the step execution exists in both the caller's view and the
+	// stored run, matching SQLite's row-update semantics.
+	execution, ok := run.StepExecutions[stepID]
+	if !ok || execution == nil {
+		return fmt.Errorf("step execution %q not found", stepID)
+	}
+	if _, ok := stored.StepExecutions[stepID]; !ok {
 		return fmt.Errorf("step execution %q not found", stepID)
 	}
 
-	// Replace the entire run with the updated state (deep copy).
-	m.runs[run.ID] = cloneRun(run)
+	// Mirror SQLiteStore.SaveExecutionState: update only the run-level
+	// status fields and the target step, not the parent run object.
+	stored.Status = run.Status
+	stored.PendingReason = run.PendingReason
+	stored.Failure = cloneFailure(run.Failure)
+	stored.UpdatedAt = run.UpdatedAt
+	stored.StepExecutions[stepID] = cloneExecution(execution)
+
 	return nil
+}
+
+// invalidateRun drops a cached run so the next GetRun reloads it from the
+// authoritative store. It is a no-op when the run is not cached.
+func (m *MemoryStore) invalidateRun(runID string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.runs, runID)
+}
+
+// invalidateDefinition drops a cached workflow version so the next
+// GetDefinition reloads it from the authoritative store.
+func (m *MemoryStore) invalidateDefinition(workflowID string, version int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	versions, ok := m.definitions[workflowID]
+	if !ok {
+		return
+	}
+	delete(versions, version)
+	if len(versions) == 0 {
+		delete(m.definitions, workflowID)
+	}
 }
 
 // Close is a no-op for the in-memory store.
@@ -155,6 +217,7 @@ func cloneRun(run *workflow.WorkflowRun) *workflow.WorkflowRun {
 	}
 
 	copied := *run
+	copied.Failure = cloneFailure(run.Failure)
 
 	if run.Input != nil {
 		copied.Input = cloneMapAny(run.Input)
@@ -166,25 +229,74 @@ func cloneRun(run *workflow.WorkflowRun) *workflow.WorkflowRun {
 			if exec == nil {
 				continue
 			}
-			execCopy := *exec
-			if exec.Input != nil {
-				execCopy.Input = cloneMapAny(exec.Input)
-			}
-			if exec.Output != nil {
-				execCopy.Output = cloneMapAny(exec.Output)
-			}
-			if exec.StartedAt != nil {
-				t := *exec.StartedAt
-				execCopy.StartedAt = &t
-			}
-			if exec.FinishedAt != nil {
-				t := *exec.FinishedAt
-				execCopy.FinishedAt = &t
-			}
-			copied.StepExecutions[stepID] = &execCopy
+			copied.StepExecutions[stepID] = cloneExecution(exec)
 		}
 	}
 
+	return &copied
+}
+
+func cloneDefinition(def workflow.WorkflowDefinition) workflow.WorkflowDefinition {
+	copied := def
+	if def.Steps == nil {
+		return copied
+	}
+
+	copied.Steps = make([]workflow.Step, len(def.Steps))
+	for i, step := range def.Steps {
+		stepCopy := step
+		if step.Config != nil {
+			stepCopy.Config = make(map[string]string, len(step.Config))
+			for key, value := range step.Config {
+				stepCopy.Config[key] = value
+			}
+		}
+		if step.DependsOn != nil {
+			stepCopy.DependsOn = append([]string(nil), step.DependsOn...)
+		}
+		if step.Inputs != nil {
+			stepCopy.Inputs = make(map[string]workflow.InputRef, len(step.Inputs))
+			for key, value := range step.Inputs {
+				stepCopy.Inputs[key] = value
+			}
+		}
+		copied.Steps[i] = stepCopy
+	}
+
+	return copied
+}
+
+func cloneExecution(execution *workflow.StepExecution) *workflow.StepExecution {
+	if execution == nil {
+		return nil
+	}
+
+	copied := *execution
+	copied.Failure = cloneFailure(execution.Failure)
+	if execution.Input != nil {
+		copied.Input = cloneMapAny(execution.Input)
+	}
+	if execution.Output != nil {
+		copied.Output = cloneMapAny(execution.Output)
+	}
+	if execution.StartedAt != nil {
+		t := *execution.StartedAt
+		copied.StartedAt = &t
+	}
+	if execution.FinishedAt != nil {
+		t := *execution.FinishedAt
+		copied.FinishedAt = &t
+	}
+
+	return &copied
+}
+
+func cloneFailure(failure *workflow.Failure) *workflow.Failure {
+	if failure == nil {
+		return nil
+	}
+
+	copied := *failure
 	return &copied
 }
 

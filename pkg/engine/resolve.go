@@ -21,9 +21,10 @@ func resolveStepInput(
 			source = run.Input
 		} else {
 			dep, ok := run.StepExecutions[ref.Source]
-			if !ok {
+			if !ok || dep == nil {
 				return nil, fmt.Errorf(
-					"input %q references unknown step %q",
+					"%w: input %q references unknown step %q",
+					ErrInputUnknownSource,
 					inputName,
 					ref.Source,
 				)
@@ -31,7 +32,8 @@ func resolveStepInput(
 
 			if dep.Status != workflow.StepSucceeded {
 				return nil, fmt.Errorf(
-					"input %q references unfinished step %q",
+					"%w: input %q references unfinished step %q",
+					ErrInputUnfinishedSource,
 					inputName,
 					ref.Source,
 				)
@@ -43,7 +45,8 @@ func resolveStepInput(
 		value, exists := source[ref.Key]
 		if !exists {
 			return nil, fmt.Errorf(
-				"input %q references missing key %q in %q",
+				"%w: input %q references missing key %q in %q",
+				ErrInputMissingKey,
 				inputName,
 				ref.Key,
 				ref.Source,

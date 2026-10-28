@@ -3,6 +3,8 @@ package engine
 import (
 	"fmt"
 
+	"github.com/fluffyTighnari/workflow-engine/pkg/logging"
+	"github.com/fluffyTighnari/workflow-engine/pkg/metrics"
 	"github.com/fluffyTighnari/workflow-engine/pkg/store"
 )
 
@@ -14,12 +16,16 @@ func newEngineWithStore(s store.WorkflowStore) *Engine {
 	return &Engine{
 		registry: registry,
 		store:    s,
+		logger:   logging.Default(),
+		metrics:  metrics.New(),
 	}
 }
 
 // NewSQLite 返回一个带缓存层的持久化引擎。
 // 内部组合 MemoryStore（缓存）和 SQLiteStore（持久化）。
 // path 是 SQLite 数据库文件路径。
+//
+// 缓存只支持单实例：同一个数据库文件不要被多个引擎/进程同时写入。
 func NewSQLite(path string) (*Engine, error) {
 	cs, err := store.NewCachedStore(path)
 	if err != nil {

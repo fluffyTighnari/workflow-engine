@@ -26,11 +26,15 @@ type Queue interface {
 // 语义：
 //   - Enqueue 在队列满时阻塞（形成背压，不丢弃任务）；
 //   - Dequeue 在队列空时阻塞；
-//   - Close 后 Dequeue 返回 ErrClosed，Enqueue 返回 ErrClosed。
+//   - Close 后 Dequeue 先消费完已入队任务，再返回 ErrClosed；
+//   - Close 后 Enqueue 返回 ErrClosed。
+//
+// Close 不关闭 jobs channel，而是关闭 done channel，因此 Enqueue、
+// Dequeue、Close 可以从多个 goroutine 并发调用而不会 panic。
 type BoundedQueue struct {
-	jobs   chan Job
-	mu     sync.Mutex
-	closed bool
+	jobs      chan Job
+	done      chan struct{}
+	closeOnce sync.Once
 }
 
 // NewBoundedQueue 创建容量为 capacity 的有界队列。
@@ -40,16 +44,16 @@ func NewBoundedQueue(capacity int) *BoundedQueue {
 	}
 	return &BoundedQueue{
 		jobs: make(chan Job, capacity),
+		done: make(chan struct{}),
 	}
 }
 
 // Enqueue 投递一个 Job。队列满时阻塞直到有空闲容量。
 func (q *BoundedQueue) Enqueue(ctx context.Context, job Job) error {
-	q.mu.Lock()
-	closed := q.closed
-	q.mu.Unlock()
-	if closed {
+	select {
+	case <-q.done:
 		return ErrClosed
+	default:
 	}
 
 	select {
@@ -57,19 +61,33 @@ func (q *BoundedQueue) Enqueue(ctx context.Context, job Job) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	case <-q.done:
+		return ErrClosed
 	}
 }
 
 // Dequeue 取出一个 Job。队列空时阻塞等待。
 func (q *BoundedQueue) Dequeue(ctx context.Context) (Job, error) {
+	// Prefer buffered jobs so Close drains instead of discarding.
 	select {
-	case job, ok := <-q.jobs:
-		if !ok {
-			return Job{}, ErrClosed
-		}
+	case job := <-q.jobs:
+		return job, nil
+	default:
+	}
+
+	select {
+	case job := <-q.jobs:
 		return job, nil
 	case <-ctx.Done():
 		return Job{}, ctx.Err()
+	case <-q.done:
+		// A job may have been buffered concurrently with Close.
+		select {
+		case job := <-q.jobs:
+			return job, nil
+		default:
+			return Job{}, ErrClosed
+		}
 	}
 }
 
@@ -80,12 +98,8 @@ func (q *BoundedQueue) Len() int {
 
 // Close 关闭队列并唤醒所有阻塞的 Dequeue。
 func (q *BoundedQueue) Close() error {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	if q.closed {
-		return nil
-	}
-	q.closed = true
-	close(q.jobs)
+	q.closeOnce.Do(func() {
+		close(q.done)
+	})
 	return nil
 }

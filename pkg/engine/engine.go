@@ -23,10 +23,15 @@
 package engine
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 
+	"github.com/fluffyTighnari/workflow-engine/pkg/logging"
+	"github.com/fluffyTighnari/workflow-engine/pkg/metrics"
 	"github.com/fluffyTighnari/workflow-engine/pkg/store"
 	"github.com/fluffyTighnari/workflow-engine/pkg/workflow"
 )
@@ -40,24 +45,27 @@ var ErrInvalidDefinition = errors.New("invalid workflow definition")
 type Engine struct {
 	registry *ExecutorRegistry
 	store    store.WorkflowStore
+	logger   logging.Logger
+	metrics  *metrics.Metrics
 }
 
-// New returns an in-memory engine with built-in executors registered.
-// This is equivalent to NewMemory().
-func New() *Engine {
-	registry := NewExecutorRegistry()
-	_ = registry.Register("compute", &ComputeExecutor{})
-	_ = registry.Register("double", &DoubleExecutor{})
-	return &Engine{
-		registry: registry,
+// SetLogger replaces the engine logger. A nil logger is ignored.
+func (e *Engine) SetLogger(logger logging.Logger) {
+	if logger != nil {
+		e.logger = logger
 	}
+}
+
+// New returns an engine without a store. CreateRun and RunWorkflow still
+// work in memory, but GetRun, RecoverRun, and ListRunsByStatus require a
+// store. Use NewMemory for an ephemeral store or NewSQLite for persistence.
+func New() *Engine {
+	return newEngineWithStore(nil)
 }
 
 // NewWithStore returns an Engine backed by the provided WorkflowStore.
 func NewWithStore(s store.WorkflowStore) *Engine {
-	e := New()
-	e.store = s
-	return e
+	return newEngineWithStore(s)
 }
 
 // RegisterExecutor adds a custom step executor to the engine.
@@ -65,7 +73,15 @@ func (e *Engine) RegisterExecutor(
 	stepType string,
 	executor StepExecutor,
 ) error {
-	return e.registry.Register(stepType, executor)
+	err := e.registry.Register(stepType, executor)
+	if err != nil {
+		e.logger.Warn("executor registration failed",
+			"step_type", stepType, "err", err)
+		return err
+	}
+
+	e.logger.Info("executor registered", "step_type", stepType)
+	return nil
 }
 
 // CreateRun validates a workflow definition, persists it, and builds
@@ -77,6 +93,11 @@ func (e *Engine) CreateRun(
 	input map[string]any,
 ) (*workflow.WorkflowRun, error) {
 	if err := validateDefinition(def); err != nil {
+		e.logger.Warn("run creation rejected",
+			"workflow_id", def.ID,
+			"workflow_version", def.Version,
+			"err", err,
+		)
 		return nil, err
 	}
 
@@ -90,6 +111,7 @@ func (e *Engine) CreateRun(
 		WorkflowID:      def.ID,
 		WorkflowVersion: def.Version,
 		Status:          workflow.RunPending,
+		PendingReason:   workflow.PendingReasonNew,
 		Input:           cloneMap(input),
 		StepExecutions:  make(map[string]*workflow.StepExecution, len(def.Steps)),
 		CreatedAt:       nowUTC(),
@@ -98,22 +120,91 @@ func (e *Engine) CreateRun(
 
 	for _, step := range def.Steps {
 		run.StepExecutions[step.ID] = &workflow.StepExecution{
-			StepID: step.ID,
-			Status: workflow.StepPending,
+			StepID:        step.ID,
+			Status:        workflow.StepPending,
+			PendingReason: initialPendingReason(step),
 		}
 	}
 
 	// Persist definition and run if we have a store.
 	if e.store != nil {
-		if err := e.store.SaveDefinition(ctx, def); err != nil {
-			return nil, fmt.Errorf("persist definition: %w", err)
+		if err := e.ensureDefinition(ctx, def); err != nil {
+			e.logger.Error("run definition persistence failed",
+				"workflow_id", def.ID,
+				"workflow_version", def.Version,
+				"err", err,
+			)
+			return nil, err
 		}
 		if err := e.store.CreateRun(ctx, def, run); err != nil {
-			return nil, fmt.Errorf("persist run: %w", err)
+			if errors.Is(err, store.ErrRunExists) {
+				e.logger.Error("run persistence failed",
+					"run_id", run.ID, "err", err)
+				return nil, err
+			}
+			wrapped := fmt.Errorf("%w: persist run: %w", ErrPersistence, err)
+			e.logger.Error("run persistence failed",
+				"run_id", run.ID, "err", wrapped)
+			return nil, wrapped
 		}
 	}
 
+	e.metrics.RunsCreated.Inc()
+	e.logger.Info("run created",
+		"run_id", run.ID,
+		"workflow_id", def.ID,
+		"workflow_version", def.Version,
+		"step_count", len(def.Steps),
+	)
 	return run, nil
+}
+
+// ensureDefinition makes sure the exact definition is persisted without
+// ever overwriting an existing version. Definitions are identified by
+// workflow ID + version and are immutable once stored.
+func (e *Engine) ensureDefinition(
+	ctx context.Context,
+	def workflow.WorkflowDefinition,
+) error {
+	stored, err := e.store.GetDefinition(ctx, def.ID, def.Version)
+	switch {
+	case err == nil:
+		if !definitionsEqual(stored, def) {
+			return fmt.Errorf(
+				"%w: workflow %q version %d already exists with different content",
+				store.ErrDefinitionExists,
+				def.ID,
+				def.Version,
+			)
+		}
+		return nil
+	case errors.Is(err, store.ErrNotFound):
+		if err := e.store.SaveDefinition(ctx, def); err != nil {
+			if errors.Is(err, store.ErrDefinitionExists) {
+				return err
+			}
+			return fmt.Errorf(
+				"%w: persist definition: %w",
+				ErrPersistence,
+				err,
+			)
+		}
+		return nil
+	default:
+		return wrapStoreError("load definition", err)
+	}
+}
+
+// definitionsEqual compares definitions by their canonical JSON form so
+// nil and empty maps/slices are treated as equivalent, matching how they
+// are persisted.
+func definitionsEqual(a, b workflow.WorkflowDefinition) bool {
+	aJSON, aErr := json.Marshal(a)
+	bJSON, bErr := json.Marshal(b)
+	if aErr != nil || bErr != nil {
+		return reflect.DeepEqual(a, b)
+	}
+	return bytes.Equal(aJSON, bJSON)
 }
 
 // Close releases the underlying store resources.
@@ -124,27 +215,68 @@ func (e *Engine) Close() error {
 	return e.store.Close()
 }
 
-// SaveDefinition persists a workflow definition to the store.
+// SaveDefinition validates and persists a new workflow version. Definitions
+// are insert-only; an existing ID + version returns store.ErrDefinitionExists.
 func (e *Engine) SaveDefinition(ctx context.Context, def workflow.WorkflowDefinition) error {
-	if e.store == nil {
-		return fmt.Errorf("no store configured")
+	if err := validateDefinition(def); err != nil {
+		e.logger.Warn("definition validation failed",
+			"workflow_id", def.ID,
+			"workflow_version", def.Version,
+			"err", err,
+		)
+		return err
 	}
-	return e.store.SaveDefinition(ctx, def)
+	if e.store == nil {
+		return fmt.Errorf("%w", ErrStoreUnavailable)
+	}
+
+	err := wrapStoreError("save definition", e.store.SaveDefinition(ctx, def))
+	if err != nil {
+		if errors.Is(err, store.ErrDefinitionExists) {
+			e.logger.Warn("definition already exists",
+				"workflow_id", def.ID,
+				"workflow_version", def.Version,
+			)
+		} else {
+			e.logger.Error("definition persistence failed",
+				"workflow_id", def.ID,
+				"workflow_version", def.Version,
+				"err", err,
+			)
+		}
+		return err
+	}
+
+	e.logger.Info("definition saved",
+		"workflow_id", def.ID,
+		"workflow_version", def.Version,
+		"step_count", len(def.Steps),
+	)
+	return nil
 }
 
 // GetDefinition loads a workflow definition from the store.
 func (e *Engine) GetDefinition(ctx context.Context, workflowID string, version int) (workflow.WorkflowDefinition, error) {
 	if e.store == nil {
-		return workflow.WorkflowDefinition{}, fmt.Errorf("no store configured")
+		return workflow.WorkflowDefinition{}, fmt.Errorf("%w", ErrStoreUnavailable)
 	}
-	return e.store.GetDefinition(ctx, workflowID, version)
+	def, err := e.store.GetDefinition(ctx, workflowID, version)
+	if err != nil {
+		return workflow.WorkflowDefinition{},
+			wrapStoreError("load definition", err)
+	}
+	return def, nil
 }
 
 // ListRunsByStatus returns the IDs of runs in any of the given statuses.
 // Used by startup recovery to re-enqueue unfinished runs.
 func (e *Engine) ListRunsByStatus(ctx context.Context, statuses ...workflow.RunStatus) ([]string, error) {
 	if e.store == nil {
-		return nil, fmt.Errorf("no store configured")
+		return nil, fmt.Errorf("%w", ErrStoreUnavailable)
 	}
-	return e.store.ListRunsByStatus(ctx, statuses...)
+	ids, err := e.store.ListRunsByStatus(ctx, statuses...)
+	if err != nil {
+		return nil, wrapStoreError("list runs", err)
+	}
+	return ids, nil
 }

@@ -29,7 +29,14 @@ func (e *Engine) SaveExecutionState(
 	run *workflow.WorkflowRun,
 	stepID string,
 ) error {
-	return e.persistExecutionState(ctx, run, stepID)
+	if err := e.persistExecutionState(ctx, run, stepID); err != nil {
+		return fmt.Errorf(
+			"%w: save execution state: %w",
+			ErrPersistence,
+			err,
+		)
+	}
+	return nil
 }
 
 // GetRun loads a run from the configured store. It returns an
@@ -39,8 +46,24 @@ func (e *Engine) GetRun(
 	runID string,
 ) (*workflow.WorkflowRun, error) {
 	if e.store == nil {
-		return nil, fmt.Errorf("engine has no store configured")
+		return nil, fmt.Errorf("%w", ErrStoreUnavailable)
 	}
 
-	return e.store.GetRun(ctx, runID)
+	run, err := e.store.GetRun(ctx, runID)
+	if err != nil {
+		return nil, wrapStoreError("load run", err)
+	}
+
+	// Pending reasons are derived from dependency state, so refresh them
+	// against the versioned definition before returning. A missing
+	// definition is not fatal here: the stored state is still returnable.
+	if def, err := e.store.GetDefinition(
+		ctx,
+		run.WorkflowID,
+		run.WorkflowVersion,
+	); err == nil {
+		refreshPendingReasons(run, def)
+	}
+
+	return run, nil
 }

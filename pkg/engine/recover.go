@@ -24,54 +24,123 @@ func (e *Engine) RecoverRun(
 	runID string,
 ) (*workflow.WorkflowRun, error) {
 	if e.store == nil {
-		return nil, fmt.Errorf("engine has no store configured")
+		return nil, fmt.Errorf("%w", ErrStoreUnavailable)
 	}
+
+	e.logger.Info("run recovery started", "run_id", runID)
 
 	// 1. Load the run from persistent storage.
 	run, err := e.store.GetRun(ctx, runID)
 	if err != nil {
-		return nil, fmt.Errorf("load run: %w", err)
+		wrapped := wrapStoreError("load run", err)
+		e.logger.Error("run recovery load failed",
+			"run_id", runID, "err", wrapped)
+		return nil, wrapped
 	}
 
 	// 2. Already terminal — nothing to repair or resume.
 	if run.Status == workflow.RunSucceeded || run.Status == workflow.RunFailed {
+		e.logger.Debug("run recovery skipped",
+			"run_id", run.ID,
+			"status", run.Status,
+			"reason", "run_terminal",
+		)
 		return run, nil
 	}
 
+	// A non-terminal run must not carry failure metadata from an older,
+	// inconsistent snapshot.
+	run.Failure = nil
+
 	// 3. Repair steps left in RUNNING by a crash.
 	repairedSteps := resetRunningSteps(run)
+	if len(repairedSteps) > 0 {
+		e.logger.Warn("running steps reset",
+			"run_id", run.ID,
+			"step_ids", repairedSteps,
+		)
+	}
 
 	// 4. If all steps are already SUCCEEDED, the run should be too
 	//    (crash may have occurred between executor success and the final
 	//     persistence of the run-level SUCCEEDED status).
 	if allStepsSucceeded(run) {
+		previousRun := snapshotRun(run)
+
 		run.Status = workflow.RunSucceeded
+		clearRunFailure(run)
 		run.UpdatedAt = nowUTC()
 		// Persist the corrected run status.
 		if err := e.persistRunStatus(ctx, run); err != nil {
-			return nil, fmt.Errorf("persist repaired run status: %w", err)
+			previousRun.restore(run)
+			wrapped := fmt.Errorf(
+				"%w: persist repaired run status: %w",
+				ErrPersistence,
+				err,
+			)
+			e.logger.Error("repaired run status persistence failed",
+				"run_id", run.ID,
+				"err", wrapped,
+				"state_rolled_back", true,
+			)
+			return nil, wrapped
 		}
+
+		e.recordRunTerminal(run)
+		e.logger.Info("run recovery finalized success",
+			"run_id", run.ID,
+			"workflow_id", run.WorkflowID,
+			"workflow_version", run.WorkflowVersion,
+		)
 		return run, nil
 	}
 
 	// 5. Persist any step repairs before resuming.
 	for _, stepID := range repairedSteps {
 		if err := e.persistExecutionState(ctx, run, stepID); err != nil {
-			return nil, fmt.Errorf("persist repaired step %q: %w", stepID, err)
+			wrapped := fmt.Errorf(
+				"%w: persist repaired step %q: %w",
+				ErrPersistence,
+				stepID,
+				err,
+			)
+			e.logger.Error("repaired step persistence failed",
+				"run_id", run.ID,
+				"step_id", stepID,
+				"err", wrapped,
+			)
+			return nil, wrapped
 		}
 	}
 
 	// 6. Load the workflow definition needed to continue execution.
 	def, err := e.GetDefinition(ctx, run.WorkflowID, run.WorkflowVersion)
 	if err != nil {
-		return nil, fmt.Errorf("load workflow definition: %w", err)
+		wrapped := fmt.Errorf("load workflow definition: %w", err)
+		e.logger.Error("run recovery definition load failed",
+			"run_id", run.ID,
+			"workflow_id", run.WorkflowID,
+			"workflow_version", run.WorkflowVersion,
+			"err", wrapped,
+		)
+		return nil, wrapped
 	}
+
+	refreshPendingReasons(run, def)
 
 	// 7. Resume execution from the repaired state.
 	if err := e.RunWorkflow(ctx, def, run); err != nil {
+		e.logger.Error("run recovery failed",
+			"run_id", run.ID,
+			"err", err,
+		)
 		return run, fmt.Errorf("resume run: %w", err)
 	}
 
+	e.logger.Info("run recovery finished",
+		"run_id", run.ID,
+		"status", run.Status,
+	)
 	return run, nil
 }
 
@@ -87,6 +156,8 @@ func resetRunningSteps(run *workflow.WorkflowRun) []string {
 		}
 
 		execution.Status = workflow.StepPending
+		execution.PendingReason = workflow.PendingReasonRecovered
+		execution.Failure = nil
 		execution.Output = nil
 		execution.Error = ""
 		execution.StartedAt = nil
@@ -116,5 +187,9 @@ func (e *Engine) persistRunStatus(
 	for stepID := range run.StepExecutions {
 		return e.store.SaveExecutionState(ctx, run, stepID)
 	}
-	return fmt.Errorf("run %q has no step executions", run.ID)
+	return fmt.Errorf(
+		"%w: run %q has no step executions",
+		ErrPersistence,
+		run.ID,
+	)
 }

@@ -9,85 +9,117 @@ import (
 	"github.com/fluffyTighnari/workflow-engine/pkg/workflow"
 )
 
-func newRecoverTestEngine(t *testing.T) (*Engine, workflow.WorkflowDefinition) {
-	t.Helper()
+func TestGetRunWithoutStore(t *testing.T) {
+	e := New()
+	_, err := e.GetRun(context.Background(), "anything")
+	if err == nil {
+		t.Fatal("expected error when engine has no store")
+	}
+}
 
+// TestResumeRunAfterReload simulates a process restart: create a run,
+// execute only the first step, then reload the run from the store with
+// a fresh engine and continue execution.
+func TestResumeRunAfterReload(t *testing.T) {
+	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "workflow.db")
-	e, err := NewSQLite(dbPath)
+
+	engine1, err := NewSQLite(dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { e.Close() })
+	t.Cleanup(func() { _ = engine1.Close() })
 
-	def := workflow.WorkflowDefinition{
-		ID:      "pipeline",
-		Version: 1,
-		Steps: []workflow.Step{
-			{
-				ID:     "A",
-				Type:   "compute",
-				Config: map[string]string{"a": "2", "b": "3"},
-			},
-			{
-				ID:        "B",
-				Type:      "double",
-				DependsOn: []string{"A"},
-				Inputs: map[string]workflow.InputRef{
-					"value": {Source: "A", Key: "result"},
-				},
-			},
-			{
-				ID:        "C",
-				Type:      "double",
-				DependsOn: []string{"B"},
-				Inputs: map[string]workflow.InputRef{
-					"value": {Source: "B", Key: "result"},
-				},
-			},
-		},
+	def := pipelineDefinition()
+
+	// CreateRun automatically persists definition and run.
+	run, err := engine1.CreateRun(ctx, def, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	return e, def
+	if err := engine1.ExecuteStep(ctx, def, run, "A"); err != nil {
+		t.Fatalf("execute A: %v", err)
+	}
+
+	if run.StepExecutions["A"].Status != workflow.StepSucceeded {
+		t.Fatal("A should have succeeded")
+	}
+	if run.StepExecutions["B"].Status != workflow.StepPending {
+		t.Fatal("B should still be pending before crash")
+	}
+	if run.StepExecutions["C"].Status != workflow.StepPending {
+		t.Fatal("C should still be pending before crash")
+	}
+
+	// Simulate process restart: a brand new engine loads the run from the DB.
+	engine2, err := NewSQLite(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = engine2.Close() })
+
+	loaded, err := engine2.GetRun(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("reload run: %v", err)
+	}
+
+	// Verify the loaded state matches where we left off.
+	if loaded.StepExecutions["A"].Status != workflow.StepSucceeded {
+		t.Fatalf("loaded A status = %q, want SUCCEEDED",
+			loaded.StepExecutions["A"].Status)
+	}
+	if loaded.StepExecutions["B"].Status != workflow.StepPending {
+		t.Fatalf("loaded B status = %q, want PENDING",
+			loaded.StepExecutions["B"].Status)
+	}
+	if loaded.StepExecutions["C"].Status != workflow.StepPending {
+		t.Fatalf("loaded C status = %q, want PENDING",
+			loaded.StepExecutions["C"].Status)
+	}
+
+	// Continue execution from the loaded state.
+	if err := engine2.RunWorkflow(ctx, def, loaded); err != nil {
+		t.Fatalf("resume RunWorkflow: %v", err)
+	}
+
+	if loaded.Status != workflow.RunSucceeded {
+		t.Fatalf("run status = %s, want SUCCEEDED", loaded.Status)
+	}
+
+	assertStepResults(t, loaded, map[string]float64{
+		"A": 5,
+		"B": 10,
+		"C": 20,
+	})
 }
 
 func TestRecoverRunResetsRunningSteps(t *testing.T) {
 	ctx := context.Background()
-	e, def := newRecoverTestEngine(t)
+	e := newSQLiteTestEngine(t)
+	run, def := createRunForPipeline(t, e)
 
 	// Create run and execute A.
-	run, err := e.CreateRun(ctx, def, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if err := e.ExecuteStep(ctx, def, run, "A"); err != nil {
 		t.Fatal(err)
 	}
 
 	// Simulate a crash mid-step-B: mark B as RUNNING with stale output
 	// that was never persisted as a successful result.
+	now := time.Now().UTC()
 	run.StepExecutions["B"].Status = workflow.StepRunning
-	startedAt := time.Now().UTC().Add(-30 * time.Second)
-	run.StepExecutions["B"].StartedAt = &startedAt
-	run.StepExecutions["B"].Output = map[string]any{"result": float64(999)} // bogus, never persisted as success
+	run.StepExecutions["B"].StartedAt = &now
+	run.StepExecutions["B"].Output = map[string]any{"result": float64(999)}
 	run.Status = workflow.RunRunning
+	run.UpdatedAt = now
 
 	// Persist this crashed state directly (as if the DB had RUNNING B).
-	if err := e.store.SaveExecutionState(ctx, run, "B"); err != nil {
+	if err := e.SaveExecutionState(ctx, run, "B"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Now recover from a fresh engine instance.
-	e2, err := NewSQLite(filepath.Join(t.TempDir(), "workflow.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer e2.Close()
-
-	// We need to load the run from the same DB, so open it again.
-	// Actually, the DB path is in the temp dir, let's use the same path.
-	// Hmm, we need to pass the path. Let's refactor.
-	// For simplicity, just use the same engine's store.
-	e2 = NewWithStore(e.store)
+	// Recover through a fresh engine sharing the same store.
+	e2 := NewWithStore(e.store)
 	recovered, err := e2.RecoverRun(ctx, run.ID)
 	if err != nil {
 		t.Fatalf("RecoverRun: %v", err)
@@ -97,15 +129,12 @@ func TestRecoverRunResetsRunningSteps(t *testing.T) {
 	if recovered.Status != workflow.RunSucceeded {
 		t.Fatalf("run status = %s, want SUCCEEDED", recovered.Status)
 	}
-
 	if got := recovered.StepExecutions["B"].Output["result"]; got != float64(10) {
 		t.Errorf("B result = %v, want 10 (the stale 999 must be discarded)", got)
 	}
 	if got := recovered.StepExecutions["C"].Output["result"]; got != float64(20) {
 		t.Errorf("C result = %v, want 20", got)
 	}
-
-	// B should now be SUCCEEDED, not still RUNNING.
 	if recovered.StepExecutions["B"].Status != workflow.StepSucceeded {
 		t.Errorf("B status = %s, want SUCCEEDED", recovered.StepExecutions["B"].Status)
 	}
@@ -113,40 +142,34 @@ func TestRecoverRunResetsRunningSteps(t *testing.T) {
 
 func TestRecoverRunAdvancesRunWhenAllStepsSucceeded(t *testing.T) {
 	ctx := context.Background()
-	e, def := newRecoverTestEngine(t)
-
-	// Create a run and manually mark all steps SUCCEEDED in memory,
-	// but leave the run itself as RUNNING (crash between step success
-	// and the final run-status persistence).
-	run, err := e.CreateRun(ctx, def, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	e := newSQLiteTestEngine(t)
+	run, def := createRunForPipeline(t, e)
 
 	// Execute A.
 	if err := e.ExecuteStep(ctx, def, run, "A"); err != nil {
 		t.Fatal(err)
 	}
 
-	// Manually simulate B and C having succeeded but run not yet updated.
+	// Manually simulate B and C having succeeded but the run not yet updated.
 	now := time.Now().UTC()
-	run.StepExecutions["B"].Status = workflow.StepSucceeded
+	for _, stepID := range []string{"B", "C"} {
+		execution := run.StepExecutions[stepID]
+		execution.Status = workflow.StepSucceeded
+		execution.StartedAt = &now
+		execution.FinishedAt = &now
+	}
 	run.StepExecutions["B"].Output = map[string]any{"result": float64(10)}
-	run.StepExecutions["B"].StartedAt = &now
-	run.StepExecutions["B"].FinishedAt = &now
-
-	run.StepExecutions["C"].Status = workflow.StepSucceeded
 	run.StepExecutions["C"].Output = map[string]any{"result": float64(20)}
-	run.StepExecutions["C"].StartedAt = &now
-	run.StepExecutions["C"].FinishedAt = &now
 
 	// Leave run as RUNNING — this is the inconsistency repair must fix.
 	run.Status = workflow.RunRunning
 	run.UpdatedAt = now
 
-	// Persist C as the last step; the run row still says RUNNING.
-	if err := e.store.SaveExecutionState(ctx, run, "C"); err != nil {
-		t.Fatal(err)
+	// Persist B and C; the run row still says RUNNING.
+	for _, stepID := range []string{"B", "C"} {
+		if err := e.SaveExecutionState(ctx, run, stepID); err != nil {
+			t.Fatalf("save step %s state: %v", stepID, err)
+		}
 	}
 
 	// Recover should detect all steps succeeded and mark the run SUCCEEDED.
@@ -163,12 +186,8 @@ func TestRecoverRunAdvancesRunWhenAllStepsSucceeded(t *testing.T) {
 
 func TestRecoverRunReturnsTerminalRunsAsIs(t *testing.T) {
 	ctx := context.Background()
-	e, def := newRecoverTestEngine(t)
-
-	run, err := e.CreateRun(ctx, def, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	e := newSQLiteTestEngine(t)
+	run, def := createRunForPipeline(t, e)
 
 	// Run the whole workflow to completion.
 	if err := e.RunWorkflow(ctx, def, run); err != nil {
@@ -188,9 +207,10 @@ func TestRecoverRunReturnsTerminalRunsAsIs(t *testing.T) {
 	if recovered.Status != workflow.RunSucceeded {
 		t.Errorf("run status = %s, want SUCCEEDED", recovered.Status)
 	}
-	for stepID, exec := range recovered.StepExecutions {
-		if exec.Status != workflow.StepSucceeded {
-			t.Errorf("step %s status = %s, want SUCCEEDED", stepID, exec.Status)
+	for stepID, execution := range recovered.StepExecutions {
+		if execution.Status != workflow.StepSucceeded {
+			t.Errorf("step %s status = %s, want SUCCEEDED",
+				stepID, execution.Status)
 		}
 	}
 }

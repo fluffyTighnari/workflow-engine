@@ -1,0 +1,4 @@
+logs/*
+!logs/README.md
+workflow.db
+*.db-journal
